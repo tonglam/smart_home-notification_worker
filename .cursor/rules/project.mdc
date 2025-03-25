@@ -1,0 +1,35 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## Core Principles
+- **Keep It Simple:** Use plain JavaScript with Bun; avoid TypeScript and OOP patterns.
+- **Functional Approach:** Build the project using functions only—no classes or object-oriented patterns.
+- **Free Quota Compliance:** Design all configuration settings and operations with Cloudflare's free quota constraints in mind.
+
+## Project Overview
+- **Runtime:** Cloudflare Worker managed by Wrangler.
+- **Language:** JavaScript (no TypeScript).
+- **Testing:** Use Bun's built-in testing framework (`bun test`).
+- **Typing:** Employ Bun Type for type checking where applicable, while staying within plain JS constraints.
+
+## Integration & Operations
+- **Cloudflare D1:** Connect to D1 for essential database operations (e.g., create, read, update, delete).
+- **MQTT Consumption:** Implement functionality to consume MQTT messages directly.
+- **Direct Functions:** Write all logic as pure functions to ensure clarity and simplicity.
+
+## Configuration & Environment
+- **Settings Management:** Store configuration settings (API keys, DB credentials, MQTT broker settings) in environment variables.
+- **Dynamic Config Loading:** Ensure configuration is loaded at runtime, keeping the Cloudflare free quota in focus.
+- **Minimal Dependencies:** Avoid unnecessary external dependencies to optimize performance and resource usage.
+
+## Testing & Development
+- **Bun Test:** Use Bun's testing framework to validate functionality; write tests as functions.
+- **Simple Setup:** Keep development scripts and commands straightforward and maintain a minimal project setup.
+- **Wrangler Integration:** Use Wrangler for deploying and managing the Cloudflare Worker seamlessly.
+
+## Best Practices
+- **Modular Functions:** Break down logic into small, reusable functions to handle MQTT, database operations, and configuration management.
+- **Direct Operations:** Implement DB and MQTT interactions directly in functions without additional abstraction layers.
+- **Resource Efficiency:** Continuously monitor resource usage to ensure adherence to Cloudflare's free tier limits.
