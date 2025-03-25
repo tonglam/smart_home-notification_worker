@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS alert_log;
 DROP TABLE IF EXISTS event_log;
 DROP TABLE IF EXISTS devices;
+DROP TABLE IF EXISTS user_homes;
 
 -- Updated Device Registry with Home Grouping
 CREATE TABLE devices (
@@ -14,6 +15,16 @@ CREATE TABLE devices (
     current_state TEXT NOT NULL,       -- 'on'/'off'/'open'/'closed'
     created_at DATETIME DEFAULT (datetime('now')),
     last_updated DATETIME DEFAULT (datetime('now'))
+);
+
+-- User-Home Relationship Management
+CREATE TABLE user_homes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,             -- External user system ID
+    home_id TEXT NOT NULL,             -- Home identifier
+    email TEXT NOT NULL,               -- User's email for notifications
+    created_at DATETIME DEFAULT (datetime('now')),
+    UNIQUE(user_id, home_id)           -- Prevent duplicate user-home relationships
 );
 
 -- Updated Event Logging
@@ -42,6 +53,7 @@ CREATE TABLE alert_log (
 
 -- New Indexes for Home-based queries
 CREATE INDEX idx_devices_home ON devices(home_id);
+CREATE INDEX idx_user_homes_user ON user_homes(user_id);
 CREATE INDEX idx_event_log_home ON event_log(home_id);
 CREATE INDEX idx_alert_log_home ON alert_log(home_id);
 CREATE INDEX idx_alert_log_user ON alert_log(user_id);

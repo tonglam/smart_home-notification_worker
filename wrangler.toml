@@ -10,3 +10,17 @@ workers_dev = true
 binding = "DB"
 database_name = "smart_home_hub_test"
 database_id = "35efce62-75ea-49af-b4ed-f5cd48052ac8"
+
+# Observability Settings
+[observability]
+enabled = true
+
+# Cron Trigger (runs every minute)
+[triggers]
+crons = ["* * * * *"]
+
+# Environment Variables
+[vars]
+MQTT_USERNAME = ""  # Set this in the Cloudflare dashboard or with wrangler secret
+MQTT_PASSWORD = ""  # Set this in the Cloudflare dashboard or with wrangler secret
+RESEND_API_KEY = "" # Set this in the Cloudflare dashboard or with wrangler secret
