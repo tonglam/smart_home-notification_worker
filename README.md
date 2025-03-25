@@ -1,64 +1,111 @@
 # Notification Worker
 
-A Cloudflare Worker for handling notifications with D1 database integration.
+## Overall
 
-## Setup
+Cloudflare Worker that handles smart home notifications through:
 
-1. Install dependencies:
+- Real-time MQTT message processing
+- Email alerts via Resend API
+- State tracking in D1 SQL database
+- HTTP API for manual alerts
 
-```bash
-bun install
+## Tech Stack
+
+![Cloudflare Worker](https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=Cloudflare&logoColor=white)
+![D1 Database](https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-333333?style=for-the-badge&logo=bun&logoColor=white)
+
+| Component         | Purpose                        |
+| ----------------- | ------------------------------ |
+| Cloudflare Worker | Serverless runtime environment |
+| D1 Database       | Persistent storage for alerts  |
+| MQTT              | Real-time message broker       |
+| Resend            | Transactional email service    |
+| Bun               | Development/test runtime       |
+
+## Workflow
+
+```mermaid
+sequenceDiagram
+    participant Device
+    participant MQTT Broker
+    participant Cloudflare Worker
+    participant D1 Database
+    participant Resend API
+    participant "End User"
+
+    Device->>MQTT Broker: Publish alert (JSON payload)
+    MQTT Broker->>Cloudflare Worker: Forward message
+    Cloudflare Worker->>D1 Database: Store alert
+    Cloudflare Worker->>Resend API: Send email notification
+    Cloudflare Worker->>D1 Database: Update alert status
+    Resend API->>User: Deliver email
+
 ```
-
-2. Configure D1 Database:
-
-```bash
-# Create a new D1 database
-wrangler d1 create notification-db
-
-# Update the database_id in wrangler.toml with the ID from the above command
-```
-
-3. Apply Database Schema:
-
-```bash
-# Apply the schema to your D1 database
-wrangler d1 execute notification-db --file=./schema.sql
-```
-
-4. Development:
-
-```bash
-bun run dev
-```
-
-5. Deployment:
-
-```bash
-bun run deploy
-```
-
-## Database Schema
-
-The application uses a SQLite database (via D1) with the following tables:
-
-1. `devices` - Stores device information and current state
-2. `device_states` - Stores device-specific settings and modes
-3. `event_log` - Tracks all device and system events
-4. `alert_log` - Records and tracks alert statuses
-
-For detailed schema information, see `schema.sql`.
-
-## API Endpoints
-
-- `GET /health` - Health check endpoint
-- `GET /` - Main endpoint that tests database connection
 
 ## Environment Variables
 
-Make sure to set up the following in your development environment:
+Set these in `wrangler.toml` or Cloudflare dashboard:
 
-- D1 database binding is configured in `wrangler.toml`
+| Variable         | Required | Description                    |
+| ---------------- | -------- | ------------------------------ |
+| `MQTT_USERNAME`  | Yes      | MQTT broker authentication     |
+| `MQTT_PASSWORD`  | Yes      | MQTT broker authentication     |
+| `RESEND_API_KEY` | Yes      | Email sending API key          |
+| `DB` (binding)   | Yes      | D1 database connection binding |
+
+**Configuration Example:**
+
+```toml
+# wrangler.toml
+[vars]
+MQTT_USERNAME = "your-broker-username"
+MQTT_PASSWORD = "your-broker-password"
+RESEND_API_KEY = "re_123456789"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "notification-db"
+database_id = "YOUR_DATABASE_ID"
+```
+
+## Usage
+
+```bash
+# Local development
+bun run dev
+
+# Production deployment
+bun run deploy
+```
+
+> **Warning**  
+> Never commit secrets to version control - use Wrangler's secret management
+
+## Database Schema
+
+#### `user_homes` Table
+
+Manages user-home relationships for notification targeting:
+
+| Column     | Type     | Description                                |
+| ---------- | -------- | ------------------------------------------ |
+| user_id    | TEXT     | External user system ID (e.g., from Auth0) |
+| home_id    | TEXT     | Smart home group identifier                |
+| email      | TEXT     | Notification email address                 |
+| created_at | DATETIME | Relationship creation timestamp            |
+
+#### `alert_log` Table
+
+Tracks security alerts and their resolution status:
+
+| Column      | Type     | Description                           |
+| ----------- | -------- | ------------------------------------- |
+| device_id   | TEXT     | Reference to triggering device        |
+| alert_type  | TEXT     | 'motion'/'contact'/'temperature'      |
+| status      | TEXT     | 'triggered'/'acknowledged'/'resolved' |
+| resolved_at | DATETIME | Null until alert is resolved          |
+| created_at  | DATETIME | Alert creation timestamp              |
 
 ## Development
 

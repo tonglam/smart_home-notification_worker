@@ -1,5 +1,5 @@
 name = "notification-worker"
-main = "src/index.js"
+main = "worker.js"
 compatibility_date = "2024-03-25"
 
 # Specify the Cloudflare Workers runtime
