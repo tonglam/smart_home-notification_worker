@@ -13,9 +13,3 @@ enabled = true
 # Cron Trigger (runs every minute)
 [triggers]
 crons = ["* * * * *"]
-
-# Environment Variables
-[vars]
-DATABASE_URL= "" # Set this in the Cloudflare dashboard or with wrangler secret
-RESEND_API_KEY = "" # Set this in the Cloudflare dashboard or with wrangler secret
-CLERK_SECRET_KEY = "" # Set this in the Cloudflare dashboard or with wrangler secret

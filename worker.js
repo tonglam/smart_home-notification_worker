@@ -1,32 +1,6 @@
-const { Resend } = require("resend");
-const { Clerk } = require("@clerk/backend");
-const { Pool } = require("pg");
-
-export const QUERIES = {
-  getUserInfo: `
-    SELECT email FROM user_homes WHERE home_id = $1 LIMIT 1
-  `,
-  getUnsentAlerts: `
-    SELECT id, home_id, user_id, message FROM alert_log WHERE sent_status = 0 ORDER BY created_at ASC LIMIT 10
-  `,
-  updateAlertStatus: `
-    UPDATE alert_log SET sent_status = 1 WHERE id = $1
-  `,
-};
-
-let pgPool;
-
-function getPgPool(connectionString) {
-  if (pgPool) return pgPool;
-  pgPool = new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-    max: 1,
-  });
-  return pgPool;
-}
+import { createClerkClient } from "@clerk/backend";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 
 async function getUserDetailsFromClerk(userId, clerkClient) {
   if (!userId) {
@@ -51,13 +25,20 @@ async function getUserDetailsFromClerk(userId, clerkClient) {
   }
 }
 
-async function processAlertBatch(pool, resend, clerkClient) {
+async function processAlertBatch(supabase, resend, clerkClient) {
   let processedCount = 0;
   let successfulCount = 0;
   let failedCount = 0;
 
   try {
-    const { rows: alerts } = await pool.query(QUERIES.getUnsentAlerts);
+    console.log("Fetching unsent alerts from Supabase...");
+    const { data: alerts, error: fetchError } = await supabase
+      .from("alert_log")
+      .select("id, home_id, user_id, message")
+      .eq("sent_status", 0)
+      .order("created_at", { ascending: true })
+      .limit(10);
+    if (fetchError) throw fetchError;
 
     if (!alerts || alerts.length === 0) {
       console.log("No unsent alerts to process.");
@@ -68,32 +49,37 @@ async function processAlertBatch(pool, resend, clerkClient) {
         message: "No alerts to process.",
       };
     }
-
     processedCount = alerts.length;
 
     for (const alert of alerts) {
+      const {
+        id: alertId,
+        home_id: homeId,
+        user_id: userId,
+        message: alertMessage,
+      } = alert;
       try {
-        const { id: alertId, home_id, user_id, message: alertMessage } = alert;
-
         const clerkUserDetails = await getUserDetailsFromClerk(
-          user_id,
+          userId,
           clerkClient
         );
 
         let homeSpecificEmail = null;
-        if (home_id) {
-          const { rows: homeInfoRows } = await pool.query(QUERIES.getUserInfo, [
-            home_id,
-          ]);
-          homeSpecificEmail = homeInfoRows[0]?.email;
+        if (homeId) {
+          console.log(`Fetching home email for home_id: ${homeId}`);
+          const { data: homeRows, error: homeError } = await supabase
+            .from("user_homes")
+            .select("email")
+            .eq("home_id", homeId)
+            .limit(1);
+          if (homeError)
+            console.error(`Error fetching home email: ${homeError.message}`);
+          homeSpecificEmail = homeRows?.[0]?.email || null;
         }
 
         const recipientEmail = homeSpecificEmail || clerkUserDetails.email;
-
         if (!recipientEmail) {
-          console.error(
-            `No recipient email found for alert_id: ${alertId} (user_id: ${user_id}, home_id: ${home_id}). Skipping.`
-          );
+          console.error(`No recipient email for alert_id: ${alertId}`);
           failedCount++;
           continue;
         }
@@ -104,110 +90,104 @@ async function processAlertBatch(pool, resend, clerkClient) {
           : "Hi there,";
         const textBody = `${greeting}\n\nThis is a notification regarding your smart home system:\n\n${alertMessage}\n\nAlert ID: ${alertId}`;
 
+        console.log(
+          `Sending email for alert_id: ${alertId} to ${recipientEmail}`
+        );
         await resend.emails.send({
           from: "onboarding@resend.dev",
           to: recipientEmail,
-          subject: subject,
+          subject,
           text: textBody,
         });
+        console.log(`Email sent successfully for alert_id: ${alertId}`);
 
-        await pool.query(QUERIES.updateAlertStatus, [alertId]);
-        console.log(
-          `Successfully processed and sent alert_id: ${alertId} to ${recipientEmail}`
-        );
+        console.log(`Updating alert status for alert_id: ${alertId}`);
+        const { error: updateError } = await supabase
+          .from("alert_log")
+          .update({ sent_status: 1 })
+          .eq("id", alertId);
+        if (updateError) throw updateError;
+        console.log(`Alert status updated for alert_id: ${alertId}`);
+
         successfulCount++;
-      } catch (error) {
+      } catch (alertError) {
         failedCount++;
         console.error(
-          `Failed to process alert_id: ${alert.id}. Error:`,
-          error.message
+          `Failed processing alert ${alertId}:`,
+          alertError.message
         );
       }
     }
-  } catch (error) {
-    console.error("Error fetching or processing alert batch:", error);
+  } catch (batchError) {
+    console.error("Error in batch processing:", batchError);
     return {
       processed: processedCount,
       successful: successfulCount,
       failed: failedCount + (processedCount - successfulCount - failedCount),
-      error: "Batch processing failed: " + error.message,
+      error: batchError.message,
     };
   }
 
   return {
-    message: `Batch processing complete. Processed: ${processedCount}, Successful: ${successfulCount}, Failed: ${failedCount}`,
     processed: processedCount,
     successful: successfulCount,
     failed: failedCount,
+    message: `Batch complete. Processed: ${processedCount}, Successful: ${successfulCount}, Failed: ${failedCount}`,
   };
 }
 
 export default {
-  async fetch(request, env, _ctx) {
+  async fetch(request, env) {
     if (request.method === "GET") {
       return new Response("Notification Worker Running", { status: 200 });
     }
-
     if (request.method === "POST") {
-      if (!env.DATABASE_URL) {
-        console.error("DATABASE_URL not configured.");
+      const supabaseUrl = env.SUPABASE_URL;
+      const supabaseKey = env.SUPABASE_KEY;
+      if (!supabaseUrl) {
+        console.error("Supabase URL missing.");
         return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Server configuration error: Database URL missing.",
-          }),
+          JSON.stringify({ success: false, error: "Supabase URL missing." }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (!supabaseKey) {
+        console.error("Supabase key missing.");
+        return new Response(
+          JSON.stringify({ success: false, error: "Supabase key missing." }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
       if (!env.CLERK_SECRET_KEY) {
-        console.error("CLERK_SECRET_KEY not configured.");
+        console.error("Clerk secret key missing.");
         return new Response(
           JSON.stringify({
             success: false,
-            error: "Server configuration error: Clerk secret key missing.",
+            error: "Clerk secret key missing.",
           }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
       if (!env.RESEND_API_KEY) {
-        console.error("RESEND_API_KEY not configured.");
+        console.error("Resend API key missing.");
         return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Server configuration error: Resend API key missing.",
-          }),
+          JSON.stringify({ success: false, error: "Resend API key missing." }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
 
-      let currentPool;
-      try {
-        currentPool = getPgPool(env.DATABASE_URL);
-        const clerkClient = Clerk({ secretKey: env.CLERK_SECRET_KEY });
-        const resend = new Resend(env.RESEND_API_KEY);
+      const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
+      const clerkClient = createClerkClient({
+        secretKey: env.CLERK_SECRET_KEY,
+      });
+      const resend = new Resend(env.RESEND_API_KEY);
 
-        const result = await processAlertBatch(
-          currentPool,
-          resend,
-          clerkClient
-        );
-
-        return new Response(JSON.stringify({ success: true, ...result }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch (error) {
-        console.error("Error in POST request handler:", error);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Failed to process alert batch: " + error.message,
-          }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
-      }
+      const result = await processAlertBatch(supabase, resend, clerkClient);
+      return new Response(JSON.stringify({ success: true, ...result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
-
     return new Response("Method Not Allowed", { status: 405 });
   },
 };
