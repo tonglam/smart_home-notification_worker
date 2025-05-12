@@ -1,15 +1,10 @@
 name = "notification-worker"
 main = "worker.js"
-compatibility_date = "2024-03-25"
+compatibility_date = "2024-09-23"
+compatibility_flags = [ "nodejs_compat" ]
 
 # Specify the Cloudflare Workers runtime
 workers_dev = true
-
-# D1 Database binding
-[[d1_databases]]
-binding = "DB"
-database_name = "smart_home_hub_test"
-database_id = "35efce62-75ea-49af-b4ed-f5cd48052ac8"
 
 # Observability Settings
 [observability]
@@ -21,6 +16,6 @@ crons = ["* * * * *"]
 
 # Environment Variables
 [vars]
-MQTT_USERNAME = ""  # Set this in the Cloudflare dashboard or with wrangler secret
-MQTT_PASSWORD = ""  # Set this in the Cloudflare dashboard or with wrangler secret
+DATABASE_URL= "" # Set this in the Cloudflare dashboard or with wrangler secret
 RESEND_API_KEY = "" # Set this in the Cloudflare dashboard or with wrangler secret
+CLERK_SECRET_KEY = "" # Set this in the Cloudflare dashboard or with wrangler secret

@@ -2,19 +2,19 @@
   "name": "notification-worker",
   "version": "1.0.0",
   "description": "Cloudflare Worker for handling notifications",
-  "main": "src/index.js",
+  "main": "worker.js",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "test": "bun test"
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@cloudflare/workers-types": "^4.20250321.0",
-    "mqtt": "^5.10.4",
-    "resend": "^4.1.2"
+    "@cloudflare/workers-types": "^4.20250510.0",
+    "@clerk/backend": "^1.32.0",
+    "pg": "^8.11.3",
+    "resend": "^4.5.1"
   },
   "devDependencies": {
-    "wrangler": "^3.34.2"
+    "wrangler": "^3.114.8"
   },
   "engines": {
     "node": ">=16.13.0"
