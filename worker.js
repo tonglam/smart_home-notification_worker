@@ -94,7 +94,7 @@ async function processAlertBatch(supabase, resend, clerkClient) {
           `Sending email for alert_id: ${alertId} to ${recipientEmail}`
         );
         await resend.emails.send({
-          from: "onboarding@resend.dev",
+          from: "Smart Home Alerts <onboarding@resend.dev>",
           to: recipientEmail,
           subject,
           text: textBody,
@@ -189,5 +189,14 @@ export default {
       });
     }
     return new Response("Method Not Allowed", { status: 405 });
+  },
+
+  async scheduled(_event, env, ctx) {
+    const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_KEY);
+    const clerkClient = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
+    const resend = new Resend(env.RESEND_API_KEY);
+    // Run batch processing in background
+    ctx.waitUntil(processAlertBatch(supabase, resend, clerkClient));
+    return new Response("Scheduled batch triggered", { status: 200 });
   },
 };
