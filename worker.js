@@ -94,7 +94,7 @@ async function processAlertBatch(supabase, resend, clerkClient) {
           `Sending email for alert_id: ${alertId} to ${recipientEmail}`
         );
         await resend.emails.send({
-          from: "Smart Home Alerts <onboarding@resend.dev>",
+          from: "Smart Home Alerts <notifications@qitonglan.com>",
           to: recipientEmail,
           subject,
           text: textBody,

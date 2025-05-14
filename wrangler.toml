@@ -9,7 +9,3 @@ workers_dev = true
 # Observability Settings
 [observability]
 enabled = true
-
-# Cron Trigger (runs every minute)
-[triggers]
-crons = ["* * * * *"]
