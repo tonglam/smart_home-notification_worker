@@ -88,7 +88,35 @@ async function processAlertBatch(supabase, resend, clerkClient) {
         const greeting = clerkUserDetails.firstName
           ? `Hi ${clerkUserDetails.firstName},`
           : "Hi there,";
-        const textBody = `${greeting}\n\nThis is a notification regarding your smart home system:\n\n${alertMessage}\n\nAlert ID: ${alertId}`;
+        const textBody = `${greeting}\n\nThis is a notification regarding your smart home system:\n\n${alertMessage}\n\nAlert ID: ${alertId}\n\n--\nSmart Home Team\n`;
+
+        // HTML email template
+        const htmlBody = `
+          <div style="font-family: Arial, sans-serif; background: #f7f7f9; padding: 32px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+              <tr>
+                <td style="background: #2d7ff9; color: #fff; padding: 24px 32px 16px 32px; border-radius: 8px 8px 0 0; text-align: center;">
+                  <h1 style="margin: 0; font-size: 1.6em; letter-spacing: 1px;">Smart Home Alert</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 24px 32px 8px 32px;">
+                  <p style="font-size: 1.1em; margin: 0 0 16px 0;">${greeting}</p>
+                  <p style="font-size: 1em; color: #222; margin: 0 0 18px 0;">This is a notification regarding your smart home system:</p>
+                  <div style="background: #f1f6ff; border-left: 4px solid #2d7ff9; padding: 16px; margin-bottom: 18px; border-radius: 4px; color: #1a2a3a; font-size: 1.08em;">
+                    ${alertMessage}
+                  </div>
+                  <p style="color: #888; font-size: 0.98em; margin: 0 0 8px 0;">Alert ID: <b>${alertId}</b></p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 0 32px 24px 32px;">
+                  <p style="font-size: 0.97em; color: #888; margin: 0;">If you have any questions, please contact our support team.<br><br>--<br>Smart Home Team</p>
+                </td>
+              </tr>
+            </table>
+          </div>
+        `;
 
         console.log(
           `Sending email for alert_id: ${alertId} to ${recipientEmail}`
@@ -98,6 +126,7 @@ async function processAlertBatch(supabase, resend, clerkClient) {
           to: recipientEmail,
           subject,
           text: textBody,
+          html: htmlBody,
         });
         console.log(`Email sent successfully for alert_id: ${alertId}`);
 
