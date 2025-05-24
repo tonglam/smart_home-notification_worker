@@ -4,6 +4,59 @@
 
 A Cloudflare Worker that processes smart home alerts from a Supabase PostgreSQL database, enriches user information via Clerk, and sends email notifications via Resend.
 
+## Get Started
+
+### 1. Clone the Repo
+
+```bash
+git clone https://github.com/tonglam/smart_home-notification_worker.git
+cd smart_home-notification_worker
+```
+
+### 2. Local Setup
+
+1. Create a `.dev.vars` file in the project root:
+
+   ```bash
+   cp .dev.vars.example .dev.vars # or create manually
+   ```
+
+   Fill in your Supabase, Clerk, and Resend credentials:
+
+   ```env
+   SUPABASE_URL="https://<project-ref>.supabase.co"
+   SUPABASE_KEY="<your-service-role-key>"
+   CLERK_SECRET_KEY="<your-clerk-secret-key>"
+   RESEND_API_KEY="<your-resend-api-key>"
+   ```
+
+2. Install dependencies (if needed):
+   ```bash
+   bun install
+   ```
+3. Start the local worker:
+   ```bash
+   bun run dev
+   ```
+
+### 3. Deploy to Cloudflare
+
+1. Set secrets using Wrangler:
+   ```bash
+   wrangler secret put SUPABASE_URL
+   wrangler secret put SUPABASE_KEY
+   wrangler secret put CLERK_SECRET_KEY
+   wrangler secret put RESEND_API_KEY
+   ```
+2. Deploy:
+   ```bash
+   bun run deploy
+   ```
+
+For more details, see the [GitHub repository](https://github.com/tonglam/smart_home-notification_worker).
+
+---
+
 Features:
 
 - Batch processing: fetch up to 10 unsent alerts per invocation.

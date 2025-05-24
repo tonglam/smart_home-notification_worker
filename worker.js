@@ -2,6 +2,13 @@ import { createClerkClient } from "@clerk/backend";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
+/**
+ * Fetch user details (first name, email) from Clerk by userId.
+ * Returns nulls if user not found or error occurs.
+ * @param {string} userId - Clerk user ID
+ * @param {object} clerkClient - Clerk backend client
+ * @returns {Promise<{firstName: string|null, email: string|null}>}
+ */
 async function getUserDetailsFromClerk(userId, clerkClient) {
   if (!userId) {
     console.warn("getUserDetailsFromClerk called with no userId");
@@ -25,13 +32,21 @@ async function getUserDetailsFromClerk(userId, clerkClient) {
   }
 }
 
+/**
+ * Process a batch of unsent alerts: fetch, notify via email, and update status.
+ * Handles up to 10 alerts per batch to stay within free quota limits.
+ * @param {object} supabase - Supabase client
+ * @param {object} resend - Resend email client
+ * @param {object} clerkClient - Clerk backend client
+ * @returns {Promise<object>} Batch processing summary
+ */
 async function processAlertBatch(supabase, resend, clerkClient) {
   let processedCount = 0;
   let successfulCount = 0;
   let failedCount = 0;
 
   try {
-    console.log("Fetching unsent alerts from Supabase...");
+    // Only fetch unsent alerts, oldest first, up to 10 per batch (free quota friendly)
     const { data: alerts, error: fetchError } = await supabase
       .from("alert_log")
       .select("id, home_id, user_id, message")
@@ -41,7 +56,6 @@ async function processAlertBatch(supabase, resend, clerkClient) {
     if (fetchError) throw fetchError;
 
     if (!alerts || alerts.length === 0) {
-      console.log("No unsent alerts to process.");
       return {
         processed: 0,
         successful: 0,
@@ -59,6 +73,7 @@ async function processAlertBatch(supabase, resend, clerkClient) {
         message: alertMessage,
       } = alert;
       try {
+        // Prefer home-specific email if available, otherwise use Clerk user email
         const clerkUserDetails = await getUserDetailsFromClerk(
           userId,
           clerkClient
@@ -66,7 +81,6 @@ async function processAlertBatch(supabase, resend, clerkClient) {
 
         let homeSpecificEmail = null;
         if (homeId) {
-          console.log(`Fetching home email for home_id: ${homeId}`);
           const { data: homeRows, error: homeError } = await supabase
             .from("user_homes")
             .select("email")
@@ -79,7 +93,7 @@ async function processAlertBatch(supabase, resend, clerkClient) {
 
         const recipientEmail = homeSpecificEmail || clerkUserDetails.email;
         if (!recipientEmail) {
-          console.error(`No recipient email for alert_id: ${alertId}`);
+          // Skip if no valid recipient
           failedCount++;
           continue;
         }
@@ -90,7 +104,7 @@ async function processAlertBatch(supabase, resend, clerkClient) {
           : "Hi there,";
         const textBody = `${greeting}\n\nThis is a notification regarding your smart home system:\n\n${alertMessage}\n\nAlert ID: ${alertId}\n\n--\nSmart Home Team\n`;
 
-        // HTML email template
+        // Compose HTML email (simple, readable, and branded)
         const htmlBody = `
           <div style="font-family: Arial, sans-serif; background: #f7f7f9; padding: 32px 0;">
             <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
@@ -118,9 +132,6 @@ async function processAlertBatch(supabase, resend, clerkClient) {
           </div>
         `;
 
-        console.log(
-          `Sending email for alert_id: ${alertId} to ${recipientEmail}`
-        );
         await resend.emails.send({
           from: "Smart Home Alerts <notifications@qitonglan.com>",
           to: recipientEmail,
@@ -128,27 +139,20 @@ async function processAlertBatch(supabase, resend, clerkClient) {
           text: textBody,
           html: htmlBody,
         });
-        console.log(`Email sent successfully for alert_id: ${alertId}`);
 
-        console.log(`Updating alert status for alert_id: ${alertId}`);
+        // Mark alert as sent in DB
         const { error: updateError } = await supabase
           .from("alert_log")
           .update({ sent_status: 1 })
           .eq("id", alertId);
         if (updateError) throw updateError;
-        console.log(`Alert status updated for alert_id: ${alertId}`);
 
         successfulCount++;
       } catch (alertError) {
         failedCount++;
-        console.error(
-          `Failed processing alert ${alertId}:`,
-          alertError.message
-        );
       }
     }
   } catch (batchError) {
-    console.error("Error in batch processing:", batchError);
     return {
       processed: processedCount,
       successful: successfulCount,
@@ -166,6 +170,12 @@ async function processAlertBatch(supabase, resend, clerkClient) {
 }
 
 export default {
+  /**
+   * Cloudflare Worker fetch handler. Accepts GET (health) and POST (trigger batch) requests.
+   * @param {Request} request
+   * @param {object} env - Environment variables
+   * @returns {Promise<Response>}
+   */
   async fetch(request, env) {
     if (request.method === "GET") {
       return new Response("Notification Worker Running", { status: 200 });
@@ -174,21 +184,18 @@ export default {
       const supabaseUrl = env.SUPABASE_URL;
       const supabaseKey = env.SUPABASE_KEY;
       if (!supabaseUrl) {
-        console.error("Supabase URL missing.");
         return new Response(
           JSON.stringify({ success: false, error: "Supabase URL missing." }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
       if (!supabaseKey) {
-        console.error("Supabase key missing.");
         return new Response(
           JSON.stringify({ success: false, error: "Supabase key missing." }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
       if (!env.CLERK_SECRET_KEY) {
-        console.error("Clerk secret key missing.");
         return new Response(
           JSON.stringify({
             success: false,
@@ -198,7 +205,6 @@ export default {
         );
       }
       if (!env.RESEND_API_KEY) {
-        console.error("Resend API key missing.");
         return new Response(
           JSON.stringify({ success: false, error: "Resend API key missing." }),
           { status: 500, headers: { "Content-Type": "application/json" } }
@@ -220,11 +226,18 @@ export default {
     return new Response("Method Not Allowed", { status: 405 });
   },
 
+  /**
+   * Cloudflare Worker scheduled event handler. Triggers batch processing in background.
+   * @param {ScheduledEvent} _event
+   * @param {object} env
+   * @param {ExecutionContext} ctx
+   * @returns {Promise<Response>}
+   */
   async scheduled(_event, env, ctx) {
     const supabase = createSupabaseClient(env.SUPABASE_URL, env.SUPABASE_KEY);
     const clerkClient = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
     const resend = new Resend(env.RESEND_API_KEY);
-    // Run batch processing in background
+    // Run batch processing in background for reliability
     ctx.waitUntil(processAlertBatch(supabase, resend, clerkClient));
     return new Response("Scheduled batch triggered", { status: 200 });
   },
